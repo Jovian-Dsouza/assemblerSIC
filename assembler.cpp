@@ -141,6 +141,16 @@ void pass1(fstream &file){
 		}
 		else if(operand == "BYTE"){
 			//find size of const
+			//stringstream byteStr(value);
+			int bytesize = value.length() - 3;
+			if(value[0] == 'C'){
+				//cout << "Character" << endl;
+				locctr += bytesize;
+			}
+			else if(value[0] == 'X'){
+				//cout << "hex" << endl;
+				locctr += (bytesize/2);
+			}
 		}
 		else{
 			cout << "Could not find opcode\n";
@@ -152,15 +162,17 @@ void pass1(fstream &file){
 
 void printText(string &Taddress, string &Tlength, stringstream &codeStream , unsigned int &locctr){
         Tlength = decToHex(locctr - hexToDec(Taddress));
-	string Tcode;
-	codeStream >> Tcode;
-	codeStram.clear();
-v
-	cout << "T" << setw(6) << setfill('0') << Taddress;
-	cout << setw(2) << setfill('0') << Tlength;
-	cout << Tcode << "\n";
+
+	cout << "T" << setw(6) << setfill('0') << Taddress << ",";
+	cout << setw(2) << setfill('0') << Tlength << ",";
+	cout << codeStream.str() << "\n";
 	Taddress.clear();
-	Tcode.clear();
+	codeStream.str(string());
+}
+
+unsigned int getSize(stringstream &s){
+	s.seekg(0, ios::end);
+	return s.tellg();
 }
 
 void pass2(fstream &file){
@@ -169,11 +181,11 @@ void pass2(fstream &file){
 	string line;
 	string label, operand, value;
 	string word[3];
-	string Taddress, Tlength;
+	string Taddress, Tcode, Tlength;
 	int count;
 	stringstream s;
 	stringstream codeStream;
-	unsigned int locctr;
+	unsigned int locctr, size=0;
 
 	while(getline(file, line)){
 		s.str(line);
@@ -207,6 +219,9 @@ void pass2(fstream &file){
 			continue;
 		}
 		else if(operand == "END"){
+			if(!codeStream.str().empty()){
+				printText(Taddress, Tlength, codeStream, locctr);
+			}
 			cout << "E" << setw(6) << setfill('0') << decToHex(start) << "\n";
 			continue;
 		}
@@ -217,13 +232,43 @@ void pass2(fstream &file){
 			if(Taddress.empty()){
 				Taddress = decToHex(locctr);
 			}
-			locctr += 3;
+			size = 3;
+			Tcode.clear();
 
-			if(!label.empty()){
+			if(!value.empty()){
+				int pos, x = 0;
+			        if((pos = value.find(",X")) != string::npos)
+				{
+			          value = value.substr(0, pos);
+				  x = 1;
+				}
+				Tcode = getSymbol(value);
+				if(Tcode.empty()){
+					cout << "Error could not find " << value << endl;
+					Tcode = "0000";
+				}
+				if(x){
+				  Tcode = decToHex(32768 + hexToDec(Tcode));
+				}
+				Tcode = opcode + Tcode;
+				//cout << Tcode;
 			}
+			else{
+				Tcode = opcode + "0000";
+			}
+
 		}
 		else if(operand == "WORD"){
-			locctr += 3;
+			if(Taddress.empty()){
+				Taddress = decToHex(locctr);
+			}
+
+			size = 3;
+			Tcode = decToHex(stoi(value));
+			stringstream tmp;
+			tmp << setw(6) << setfill('0') << Tcode;
+			Tcode = tmp.str();
+			//cout << "Tcode : " << Tcode << endl;
 		}
 		else if(operand == "RESW"){
 			if(!Taddress.empty()){
@@ -232,14 +277,51 @@ void pass2(fstream &file){
 			locctr += (3 * stoi(value));
 		}
 		else if(operand == "RESB"){
+			if(!Taddress.empty()){
+			  printText(Taddress, Tlength, codeStream, locctr);
+			}
 			locctr += stoi(value);
 		}
 		else if(operand == "BYTE"){
 			//find size of const
+			if(Taddress.empty()){
+				Taddress = decToHex(locctr);
+			}
+			Tcode = "";
+			//stringstream byteStr(value);
+			int bytesize = value.length() - 3;
+			if(value[0] == 'C'){
+				//cout << "Character" << endl;
+				size = bytesize;
+				//cout << value;
+				for(int i = 2; i < bytesize+2; i++){
+					//cout << value[i];
+					Tcode = Tcode + decToHex(int(value[i]));
+				}
+				//cout << "Tcode = " << Tcode << endl;
+			}
+			else if(value[0] == 'X'){
+				//cout << "hex" << endl;
+				size = (bytesize/2);
+			        Tcode = value.substr(2,size+1);
+			}
+
 		}
 		else{
 			cout << "Could not find opcode\n";
 		}
+
+	if(getSize(codeStream) + size >= 60){
+		cout << "INSIDE IF " << getSize(codeStream) << " " << size<< endl;
+		printText(Taddress, Tlength, codeStream, locctr);		
+	}
+	
+	locctr += size;
+	codeStream << Tcode;
+	Tcode.clear();
+	size = 0;
+	//cout << "\nTcode : " << Tcode ;
+	//cout << "\n[CodeStream : " << codeStream.str() << " ] ";
 
 
 	}
